@@ -29,7 +29,7 @@ def EqualWithFuzz(a, b, fuzz=300):
 
 def MatchWithFuzzByHour(ref, value):
     """Returns unfuzzy matched value if value is equal to ref +/- 1h.
-    
+
     E.g.
     (3600, 3600) -> 3600
     (3600, 3601) -> 3600
@@ -152,7 +152,7 @@ class KindleBook(object):
     # Minimum amount of time a book must be picked up for it to be considered
     # that it was actually read, as opposed to picked up and discarded again.
     MIN_IN_HAND_SECS = 2 * 60
-    
+
     # Minimum amount of time a book must be picked up for it to be consider
     # that it was actually read, if the reading appeared to progress backwards
     # through the book.
@@ -174,7 +174,7 @@ class KindleBook(object):
             if EqualWithFuzz(last[0], ts, 1):
                 self.events[-1][0] = min(last[0], ts)
                 self.events[-1][1] = new_event
-                return                
+                return
             if last[1] == match_old and EqualWithFuzz(last[0], ts, old_fuzz):
                 self.events[-1][0] = min(last[0], ts)
                 self.events[-1][1] = new_event
@@ -270,7 +270,7 @@ class KindleBook(object):
                 continuing = True
             elif (read[0] - last[2]) < self.MIN_IN_HAND_SECS:
                 # Gap between reads is so short nothing else could have been
-                # read in the interim... 
+                # read in the interim...
                 continuing = True
             # But only continuing if we're still going fowards in the book...
             if continuing and forwards:
@@ -316,7 +316,7 @@ class KindleBook(object):
 
 
 class KindleLog(object):
-    
+
     # Acceptable jumps in time (in seconds).
     MAX_BACKWARDS_JUMP = 3601  # Allow an hour for DST fuckups.
     MAX_FORWARDS_JUMP = 3600 * 24 * 120  # 4 months
@@ -325,7 +325,7 @@ class KindleLog(object):
     # Regexp to extract state changes
     STATE_CHANGE_RE = re.compile(
             r'^.*?powerd.*?def:statech.*?:State change: (.*) -> (.*)$')
-    
+
     # Regexp to extract timezone changes
     TZ_CHANGE_RE = re.compile(
             r'^.*TimezoneService:TimeZoneChange:offset=(.*),zone=(.*),.*$')
@@ -424,7 +424,7 @@ class KindleLog(object):
 
     def _CheckJump(self):
         """Check for large jumps in time between log lines
-        
+
         If a large jump is detected this method fixes up the timestamp to
         remove it if possible, this stores state to keep subsequent log lines
         in sync.
@@ -516,7 +516,7 @@ class KindleLog(object):
             self._state.base_badtime = None
             self._CalculateTime()
             return
-        
+
         # Not back in reality. Update jump offsets, badtime becomes the new
         # value we just read from the line, realtime becomes the calculated
         # time we were up to after the previous line taking into account the
@@ -587,7 +587,7 @@ class KindleLog(object):
         m = self.TZ_CHANGE_RE.match(line)
         if not m:
             return 0
-        
+
         offset, tzname = m.groups()
         try:
             new_tz = pytz.timezone(tzname)
@@ -671,7 +671,7 @@ class KindleLog(object):
             ts_str = ' @ %s' % FormatTime(ts)
         self._debug('Power State: %s -> %s%s', current_state, new_state, ts_str)
         self._state.power_state = (ts, new_state)
-    
+
     def FormatStates(self):
         result = ['%s -> %s:' % (
             time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(self._start)),
@@ -719,7 +719,7 @@ class KindleLog(object):
             book.Open(self._ts)
         elif b_from == 'Bookworm':
             book.Close(self._ts)
-        
+
         if b_from == 'Home' and b_to == 'Bookworm':
             # New book being opened, handled by PickUp/PutDown in
             # _BookTransition.
@@ -751,7 +751,7 @@ class KindleLog(object):
             # Position update.
             book = self._EnsureBook(self._state.book, None)
             book.Close(self._ts, position)
-    
+
     @property
     def start(self):
         if not self.parsed:
@@ -814,7 +814,7 @@ class KindleLogs(object):
 
     def ProcessDirectory(self, directory):
         """Processes a directory of ordered Kindle logfiles.
-        
+
         This method is aware of Kindle log file naming conventions and acts
         accordingly (skipping duplicates, ignoring partial logfiles).
         """
@@ -852,7 +852,7 @@ class KindleLogs(object):
 
     def ProcessFiles(self, files):
         """Processes an ordered list of logfiles.
-        
+
         This method simply parses the logfiles in the order given, with no
         attempt to interpret filenames and apply any special logic.
         """
