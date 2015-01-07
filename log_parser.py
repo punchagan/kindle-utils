@@ -3,7 +3,7 @@
 # This file is released under the GPLv2 license.
 #     Copyright (C) 2012 Matt Brown <matt@mattb.net.nz>
 
-from datetime import datetime, timedelta, tzinfo
+from datetime import datetime
 import code
 import cPickle as pickle
 import logging

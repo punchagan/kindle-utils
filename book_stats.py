@@ -3,14 +3,10 @@
 # This file is released under the GPLv2 license.
 #     Copyright (C) 2012 Matt Brown <matt@mattb.net.nz>
 
-from datetime import datetime, timedelta, tzinfo
-import code
-import cPickle as pickle
+from datetime import timedelta
 import logging
 import optparse
 import os
-import pytz
-import re
 import sys
 import time
 
