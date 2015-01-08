@@ -350,8 +350,9 @@ class KindleLog(object):
     SCREEN_SAVER_RE = re.compile(
         r'^.*: I ReadingTimerController:Information::.*reason :(\d)$'
     )
-    LPR_RE = re.compile(r'^.*: I Reader:SYNC LPR:position=(.*?):'
-                        'Send LPR to server.*$')
+    READING_TIMER_RE = re.compile(
+        r'^.*: I ReadingTimerController:Information::CurrentPos:MobiPosition: (\d*?),.*$'
+    )
 
     def __init__(self, filename, initial_state=None):
         self.filename = filename
@@ -709,7 +710,7 @@ class KindleLog(object):
             self._BookTransition(asin, length, position)
             return 1
         # Check for position updates.
-        m = self.LPR_RE.match(line)
+        m = self.READING_TIMER_RE.match(line)
         if m:
             position, = m.groups()
             self._BookTransition(None, '', position)
