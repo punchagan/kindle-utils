@@ -18,6 +18,7 @@ if sys.hexversion < 0x02070000:
     sys.exit("Python 2.7 or newer is required to run this program.")
 
 TS_REGEXP = re.compile(r'^(\d{6}:\d{6})')
+DEFAULT_TZ = pytz.timezone('Asia/Kolkata')
 
 logger = logging.getLogger().getChild('log_parser')
 
@@ -47,8 +48,6 @@ def FormatTime(ts):
 
 class KindleLogState(object):
 
-    DEFAULT_TZ = pytz.timezone('Europe/Dublin')
-    
     def __init__(self, copy_from):
         if not copy_from:
             self._reset()
@@ -84,7 +83,7 @@ class KindleLogState(object):
         self.old_tz = None
         self.old_tz_jump = None
         # The current timezone.
-        self.timezone = self.DEFAULT_TZ
+        self.timezone = DEFAULT_TZ
         # The current state of the device, and the time it was entered.
         # (ts, state).
         self.power_state = (None, None)
@@ -294,12 +293,11 @@ class KindleBook(object):
                     firstpos = data
                     latestpos = data
                 start = ts
-            elif etype == self.CLOSE:
+            elif etype in (self.CLOSE, self.PUT_DOWN):
                 if last in (self.PICK_UP, self.OPEN):
                     read_time += ts - start
                 if data:
                     latestpos = data
-            elif etype == self.PUT_DOWN:
                 if last in (self.PICK_UP, self.OPEN):
                     read_time += ts - start
                 if data:
@@ -331,19 +329,26 @@ class KindleLog(object):
             r'^.*TimezoneService:TimeZoneChange:offset=(.*),zone=(.*),.*$')
 
     # Regexps to match kernel reboot logs
-    LINUX_REBOOT_RE = re.compile(
-            r'^.*Linux #\d [A-Za-z]{3} [A-Za-z]{3} \d{1,2} \d{2}:\d{2}:\d{2} '
-            '[A-Z]{3} \d{4}$')
-    INIT_BOOT_RE = re.compile(r'^.*system: I S21init_time:initboot:time=.*$')
-    SYSTEM_BOOTED_RE = re.compile(r'^.*system: I S96boot_finished:def:'
-            'Boot finished script received framework booted event.*$')
+    LINUX_REBOOT_RE = re.compile(r'^.*Linux version .*$')
+    INIT_BOOT_RE = re.compile(
+        r'^.*system: D sytem:event_emitted:mounted_userstore:.*$'
+    )
+    SYSTEM_BOOTED_RE = re.compile(
+        r'^.*system: D system:event_emitted:framework_ready:.*$'
+    )
 
     # Regexps to match booklet state changes
-    BOOKLET_CHANGE_RE = re.compile(r'^.*: I BookletManager:SwitchingBooklets:'
-                                   'from=(.*),to=(.*):.*$')
-    BOOK_CHANGE_RE = re.compile(r'^.*: I Reader:BOOK INFO:book asin=(.*?),.*,'
-                                'length=(.*?),.*,'
-                                'last read position=(.*?),.*$')
+    BOOKLET_CHANGE_RE = re.compile(
+        r'^.*: I BookletImplementation:Starting:name=.*?.booklet.(.*):'
+    )
+    BOOK_CHANGE_RE = re.compile(
+        r'^.*: I ReaderInfoLog:BookInformation:book asin=(.*?),.*,'
+        'length=(.*?),.*,'
+        'last read position=(.*?),.*$'
+    )
+    SCREEN_SAVER_RE = re.compile(
+        r'^.*: I ReadingTimerController:Information::.*reason :(\d)$'
+    )
     LPR_RE = re.compile(r'^.*: I Reader:SYNC LPR:position=(.*?):'
                         'Send LPR to server.*$')
 
@@ -686,8 +691,15 @@ class KindleLog(object):
         # Check for booklet change.
         m = self.BOOKLET_CHANGE_RE.match(line)
         if m:
-            booklet_from, booklet_to = m.groups()
-            self._BookletTransition(booklet_from, booklet_to)
+            booklet_to, = m.groups()
+            self._BookletTransition(booklet_to)
+            return 1
+        # Check for screensaver
+        m = self.SCREEN_SAVER_RE.match(line)
+        if m:
+            event_type, = m.groups()
+            booklet_to = 'reading' if event_type == '2' else 'screen_saver'
+            self._BookletTransition(booklet_to)
             return 1
         # Check for book change.
         m = self.BOOK_CHANGE_RE.match(line)
@@ -710,20 +722,15 @@ class KindleLog(object):
             self.books[asin] = book
         return self.books[asin]
 
-    def _BookletTransition(self, b_from, b_to):
-        self._debug('Booklet: %s -> %s', b_from, b_to)
+    def _BookletTransition(self, b_to):
+        self._debug('Booklet: -> %s', b_to)
         if not self._state.book:
             return
         book = self._EnsureBook(self._state.book, None)
-        if b_to == 'Bookworm':
+        if b_to == 'reader':
             book.Open(self._ts)
-        elif b_from == 'Bookworm':
+        else:
             book.Close(self._ts)
-
-        if b_from == 'Home' and b_to == 'Bookworm':
-            # New book being opened, handled by PickUp/PutDown in
-            # _BookTransition.
-            pass
 
     def _BookTransition(self, asin, length, position):
         if asin:
