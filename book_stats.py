@@ -6,6 +6,7 @@
 from datetime import datetime, timedelta, tzinfo
 import code
 import cPickle as pickle
+import json
 import logging
 import optparse
 import os
@@ -50,35 +51,55 @@ def PrintHMS(seconds):
         return '%s, %s' % (days, FormatHMS(hms))
 
 
-def GetBookMetadata(asin, book_dir):
-    mobi = None
-    sidecar = None
-    for bookfile in sorted(os.listdir(book_dir)):
-        if mobi and sidecar:
-            break
-        if asin not in bookfile:
-            continue
-        filename = os.path.join(book_dir, bookfile)
-        if bookfile.endswith(('.azw', '.mobi')):
-            try:
-                mobi = mobibook.MobiBook(open(filename, 'r'))
-            except mobibook.MobiException, e:
-                logger.warn('Could not read MobiBook %s for %s: %s', bookfile,
-                            asin, e)
-                mobi = None
-        elif bookfile.endswith('.apnx'):
-            try:
-                sidecar = apnx_parser.ApnxFile(filename)
-            except apnx_parser.ApnxException, e:
-                logger.warn('Could not read page number sidecar %s for %s: %s',
-                            bookfile, asin, e)
-                sidecar = None
-            if not sidecar.HasPageNumbers():
-                logger.info('Sidecar %s for %s has no page number data!',
-                        bookfile, asin)
-                sidecar = None
+def ScanBookMetadata(book_dir, metadata=None):
+    if metadata is None:
+        metadata = {}
 
-    return mobi, sidecar
+    for root, dirs, files in os.walk(book_dir):
+
+        for dir_ in dirs:
+            ScanBookMetadata(os.path.join(root, dir_), metadata)
+
+        for bookfile in files:
+            filename = os.path.join(root, bookfile)
+
+            if bookfile.endswith(('.azw', '.azw3', '.mobi')):
+                try:
+                    mobi = mobibook.MobiBook(open(filename, 'r'))
+                    asin = mobi.asin
+                    if asin:
+                        _, sidecar = metadata.setdefault(asin, (None, None))
+                        metadata[asin] = mobi, sidecar
+
+                    else:
+                        logger.warn('Could not determine asin for %s', bookfile)
+
+                except mobibook.MobiException, e:
+                    logger.warn('Could not read MobiBook %s: %s', bookfile, e)
+
+            elif bookfile.endswith('.apnx'):
+                try:
+                    sidecar = apnx_parser.ApnxFile(filename)
+
+                except apnx_parser.ApnxException, e:
+                    logger.warn(
+                        'Could not read page number sidecar %s: %s', bookfile, e
+                    )
+
+                if not sidecar.HasPageNumbers():
+                    logger.info('Sidecar %s for %s has no page number data!',
+                            bookfile, asin)
+
+                else:
+                    asin = json.loads(sidecar.header_metadata).get('asin', '')
+                    if asin:
+                        mobi, _ = metadata.setdefault(asin, (None, None))
+                        metadata[asin] = mobi, sidecar
+
+                    else:
+                        logger.warn('Could not determine asin for %s', bookfile)
+
+    return metadata
 
 
 def PrintBooks(books, book_dir, only_book=None, verbose=False):
@@ -99,8 +120,10 @@ def PrintBooks(books, book_dir, only_book=None, verbose=False):
 
     total_duration = 0
     eventpos = 0
+    if len(rv) > 0:
+        book_dir_metadata = ScanBookMetadata(book_dir)
     for newest, asin, book in sorted(rv, reverse=True):
-        metadata, sidecar = GetBookMetadata(asin, book_dir)
+        metadata, sidecar = book_dir_metadata.get(asin, (None, None))
         if metadata:
             title = '%s: %s' % (asin, metadata.title)
         else:
