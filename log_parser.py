@@ -293,11 +293,12 @@ class KindleBook(object):
                     firstpos = data
                     latestpos = data
                 start = ts
-            elif etype in (self.CLOSE, self.PUT_DOWN):
+            elif etype == self.CLOSE:
                 if last in (self.PICK_UP, self.OPEN):
                     read_time += ts - start
                 if data:
                     latestpos = data
+            elif etype == self.PUT_DOWN:
                 if last in (self.PICK_UP, self.OPEN):
                     read_time += ts - start
                 if data:
