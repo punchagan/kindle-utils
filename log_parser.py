@@ -819,36 +819,31 @@ class KindleLogs(object):
         accordingly (skipping duplicates, ignoring partial logfiles).
         """
         logger.info('Processing logs from %s', directory)
-        last_seq = ('', '')
-        for logfile in sorted(os.listdir(directory)):
-            if not logfile.startswith('messages_'):
-                continue
-            _, seq, datestr = logfile.split('_', 2)
-            if self.state and logfile <= self.state.last_filename:
-                logger.debug('Already processed %s', logfile)
-                last_seq = (seq, datestr)
-                continue
-            if last_seq[0] == seq and datestr > last_seq[1]:
-                # Newer version of the last logfile. Ignore it.
-                old = self.files.pop(-1)
-                logger.info('Ignoring %s in favour of %s',
-                            old.state.last_filename, logfile)
-                self.state = self.files[-1].state
-            try:
-                log = KindleLog(os.path.join(directory, logfile), self.state)
-                self.files.append(log)
-                self.state = log.state  # Triggers parsing.
-                last_seq = (seq, datestr)
-                logger.info('Parsed %s. %s -> %s.', log, FormatTime(log.start),
-                            FormatTime(log.end))
-                logger.debug('State: %s', self.state)
-            except ValueError, e:
-                logger.error('Could not parse %s! %s', logfile, e)
-                continue
-        self.files.sort()
-        logger.info('Found %d logs. %s => %s', len(self.files),
-                    FormatTime(self.files[0].start),
-                    FormatTime(self.files[-1].end))
+        message_files = sorted([
+            name for name in os.listdir(directory)
+            if name.startswith('messages_')
+        ])
+
+        files = [message_files[0]]
+
+        for logfile in message_files[1:]:
+            last_file = files[-1]
+            _, last_seq, last_date = last_file.split('_', 2)
+            _, seq, date = logfile.split('_', 2)
+
+            if last_seq != seq:
+                files.append(logfile)
+
+            elif last_seq == seq and date > last_date:
+                files.pop(-1)
+                files.append(logfile)
+                logger.info('Ignoring %s in favour of %s', last_file, logfile)
+
+            else:
+                logger.info('Ignoring %s in favour of %s', logfile, last_file)
+
+        files = [ os.path.join(directory, logfile) for logfile in files]
+        self.ProcessFiles(files)
 
     def ProcessFiles(self, files):
         """Processes an ordered list of logfiles.
@@ -857,7 +852,6 @@ class KindleLogs(object):
         attempt to interpret filenames and apply any special logic.
         """
         logger.info('Processing specified logfiles: %s', ', '.join(files))
-        last_seq = ('', '')
         for logfile in files:
             try:
                 log = KindleLog(logfile, self.state)
